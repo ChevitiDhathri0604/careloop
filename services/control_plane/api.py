@@ -1,0 +1,255 @@
+"""
+CareLoop Control Plane API
+Exposes endpoints for the entire CareLoop ecosystem:
+- Agent registry & Emergency Kill-Switch
+- Event Ingestion & Routing
+- Action Ledger & Cryptographic Audit Chain
+- Clinician Approval Inbox
+- Loop Tracker & Deadline Escalations
+- Safety moments (Conflict detection, Injection guard, PV bridge)
+- Replay Simulator
+"""
+
+from typing import Dict, Any, List, Optional
+from fastapi import FastAPI, HTTPException, Body
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from .registry import agent_registry
+from .ledger import action_ledger
+from .loop_tracker import loop_tracker
+from .risk_gate import risk_gate
+from .router import event_router
+
+from services.ingestion.event_publisher import event_bus
+from services.safety.injection_guard import injection_guard
+from services.safety.pharmacovigilance import pv_bridge
+from services.safety.behaviour_monitor import behaviour_monitor
+from services.simulator.replay_engine import replay_engine
+from services.agents import lab_agent, pharmacy_agent, scheduling_agent, billing_agent, outreach_agent
+
+app = FastAPI(title="CareLoop Control Plane", version="2.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Request Models
+class EventRequest(BaseModel):
+    eventType: str
+    patientId: str
+    patientName: Optional[str] = "Synthetic Patient"
+    data: Dict[str, Any]
+
+class ApprovalDecisionRequest(BaseModel):
+    actionId: str
+    decision: str  # "APPROVE" or "REJECT"
+    clinicianId: str = "DR-JENKINS-88"
+    notes: Optional[str] = None
+
+class FreeTextInput(BaseModel):
+    patientId: str
+    messageText: str
+
+class KillSwitchRequest(BaseModel):
+    agentId: str
+    action: str # "QUARANTINE" or "RESTORE"
+    reason: Optional[str] = "Manual operator override"
+
+# Endpoints
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy",
+        "service": "careloop-control-plane",
+        "auditChainIntegrity": action_ledger.verify_audit_chain()
+    }
+
+@app.get("/api/metrics")
+def get_metrics():
+    return loop_tracker.get_metrics()
+
+@app.get("/api/agents")
+def list_agents():
+    return [a.dict() for a in agent_registry.list_agents()]
+
+@app.post("/api/agents/kill-switch")
+def toggle_kill_switch(req: KillSwitchRequest):
+    if req.action == "QUARANTINE":
+        behaviour_monitor.manual_kill_switch(req.agentId, req.reason)
+        return {"status": "QUARANTINED", "agentId": req.agentId}
+    else:
+        behaviour_monitor.reset_agent(req.agentId)
+        return {"status": "RESTORED", "agentId": req.agentId}
+
+@app.get("/api/ledger/proposals")
+def get_proposals():
+    return action_ledger.get_proposals()
+
+@app.post("/api/ledger/decide")
+def decide_proposal(req: ApprovalDecisionRequest):
+    action = action_ledger.proposals.get(req.actionId)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action proposal not found")
+
+    if req.decision == "APPROVE":
+        new_status = "APPROVED"
+        agent_registry.record_feedback(action["agentId"], approved=True)
+        updated = action_ledger.update_proposal_status(req.actionId, new_status, actor=req.clinicianId, notes=req.notes)
+        
+        # If this was an outreach message, mark patient contacted in loop tracker
+        if action["actionType"] == "OUTREACH_SEND_MESSAGE":
+            active_loops = loop_tracker.get_active_loops(action["patientId"])
+            if active_loops:
+                loop_tracker.mark_patient_contacted(active_loops[0]["loopId"])
+
+        return {"status": "APPROVED", "action": updated}
+    else:
+        new_status = "REJECTED_BY_CLINICIAN"
+        agent_registry.record_feedback(action["agentId"], approved=False)
+        updated = action_ledger.update_proposal_status(req.actionId, new_status, actor=req.clinicianId, notes=req.notes)
+        return {"status": "REJECTED", "action": updated}
+
+@app.get("/api/ledger/audit")
+def get_audit_trail():
+    return {
+        "integrityValid": action_ledger.verify_audit_chain(),
+        "entriesCount": len(action_ledger.audit_log),
+        "entries": action_ledger.get_audit_trail()[-50:]
+    }
+
+@app.get("/api/loops")
+def get_loops():
+    # Evaluate deadline checks on poll
+    loop_tracker.check_deadlines()
+    return loop_tracker.get_active_loops()
+
+@app.post("/api/loops/{loop_id}/close")
+def close_loop(loop_id: str, summary: str = Body(..., embed=True)):
+    closed = loop_tracker.close_loop(loop_id, summary)
+    if not closed:
+        raise HTTPException(status_code=404, detail="Loop not found")
+    return {"status": "CLOSED", "loop": closed}
+
+@app.post("/api/events")
+async def ingest_event(event_req: EventRequest):
+    event = await event_bus.publish(event_req.dict())
+    plan = event_router.route_event(event)
+    return {"status": "PUBLISHED", "eventId": event["eventId"], "orchestrationPlan": plan}
+
+@app.post("/api/safety/inspect-text")
+def inspect_text(req: FreeTextInput):
+    """Safety Moment 2: Prompt-injection inspection"""
+    is_safe, reason, meta = injection_guard.inspect_text(req.messageText, source_identifier=f"patient_{req.patientId}")
+    return {
+        "isSafe": is_safe,
+        "reason": reason,
+        "metadata": meta,
+        "totalBlockedAttempts": injection_guard.blocked_attempts_count
+    }
+
+@app.post("/api/safety/patient-reply")
+def handle_patient_reply(req: FreeTextInput):
+    """
+    Handles inbound patient text with:
+    1. Prompt-injection guard
+    2. Pharmacovigilance ADR analysis (E2B ICSR generator)
+    """
+    # 1. Injection check
+    is_safe, reason, meta = injection_guard.inspect_text(req.messageText, source_identifier=f"patient_{req.patientId}")
+    if not is_safe:
+        return {
+            "status": "BLOCKED",
+            "securityEvent": "PROMPT_INJECTION_PREVENTED",
+            "reason": reason,
+            "details": meta
+        }
+
+    # 2. Pharmacovigilance check
+    from data.fhir_store import fhir_store
+    meds = fhir_store.get_medications(req.patientId)
+    adr_case = pv_bridge.analyze_message_for_adr(req.patientId, req.messageText, meds)
+
+    return {
+        "status": "PROCESSED",
+        "adrDetected": adr_case is not None,
+        "adrCase": adr_case
+    }
+
+@app.get("/api/safety/pv-cases")
+def get_pv_cases():
+    return pv_bridge.get_all_cases()
+
+@app.post("/api/simulator/run")
+def run_simulation(policy: Optional[Dict[str, Any]] = None):
+    return replay_engine.run_simulation(policy)
+
+@app.post("/api/demo/run-full-scenario")
+async def run_full_demo():
+    """
+    Executes the complete critical-result-after-discharge end-to-end scenario:
+    1. Patient P-84920 discharged (ADT^A03)
+    2. Critical lab results arrives: K+ = 6.4 mEq/L (ORU^R01)
+    3. Loop opened with 60-min deadline
+    4. Lab agent analyzes and cites FHIR observation
+    5. Pharmacy agent analyzes medications and flags Spironolactone (field masking active)
+    6. Scheduling agent auto-books urgent slot (T1)
+    7. Billing agent attempts invoice dispatch -> PAUSED by conflict rule (Safety Moment 1)
+    8. Outreach agent drafts multilingual message -> Enters Approval Inbox (Safety Moment 3)
+    """
+    patient_id = "P-84920"
+
+    # Step 1: Discharge Event
+    discharge_evt = await event_bus.publish({
+        "eventType": "PATIENT_DISCHARGED",
+        "patientId": patient_id,
+        "patientName": "Ramesh Kumar",
+        "data": {"dischargeTime": "2026-10-31T09:30:00Z", "disposition": "HOME"}
+    })
+
+    # Step 2: Critical Lab Event (Potassium 6.4 mEq/L)
+    lab_evt = await event_bus.publish({
+        "eventType": "CRITICAL_LAB_RESULT",
+        "patientId": patient_id,
+        "patientName": "Ramesh Kumar",
+        "data": {
+            "isCritical": True,
+            "observations": [{
+                "loinc": "2823-3",
+                "testName": "Potassium [Moles/volume] in Serum or Plasma",
+                "value": 6.4,
+                "unit": "mEq/L",
+                "flag": "CRITICAL_HIGH"
+            }]
+        }
+    })
+
+    # Route event and trigger agents
+    event_router.route_event(lab_evt)
+
+    # Step 3: Run Agents
+    lab_res = lab_agent.run("TASK-LAB-01", patient_id, {"value": 6.4})
+    pharm_res = pharmacy_agent.run("TASK-PHARM-01", patient_id, lab_res)
+    sched_res = scheduling_agent.run("TASK-SCHED-01", patient_id, "Critical Hyperkalemia post-discharge")
+    billing_res = billing_agent.run("TASK-BILL-01", patient_id) # Paused by conflict rule!
+    outreach_res = outreach_agent.run("TASK-OUTREACH-01", patient_id, {"lab": lab_res, "pharmacy": pharm_res})
+
+    active_loops = loop_tracker.get_active_loops(patient_id)
+    loop = active_loops[0] if active_loops else {}
+
+    return {
+        "status": "DEMO_SCENARIO_EXECUTED",
+        "patientId": patient_id,
+        "loop": loop,
+        "labAgent": lab_res,
+        "pharmacyAgent": pharm_res,
+        "schedulingAgent": sched_res,
+        "billingAgent": billing_res,
+        "outreachAgent": outreach_res,
+        "metrics": loop_tracker.get_metrics(),
+        "auditChainValid": action_ledger.verify_audit_chain()
+    }

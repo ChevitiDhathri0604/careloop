@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  event-bus:
+    image: redis:7-alpine
+    container_name: careloop-event-bus
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db:
+    image: postgres:15-alpine
+    container_name: careloop-postgres
+    environment:
+      POSTGRES_USER: careloop
+      POSTGRES_PASSWORD: careloop_secure_password
+      POSTGRES_DB: careloop_audit
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U careloop -d careloop_audit"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m uvicorn services.gateway.mcp_server:app --host 0.0.0.0 --port 8001
+    container_name: careloop-gateway
+    environment:
+      - PORT=8001
+      - REDIS_URL=redis://event-bus:6379
+      - DB_URL=postgresql://careloop:careloop_secure_password@db:5432/careloop_audit
+    ports:
+      - "8001:8001"
+    depends_on:
+      - event-bus
+      - db
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m uvicorn services.control_plane.api:app --host 0.0.0.0 --port 8000
+    container_name: careloop-control-plane
+    environment:
+      - PORT=8000
+      - REDIS_URL=redis://event-bus:6379
+      - GATEWAY_URL=http://gateway:8001
+      - DB_URL=postgresql://careloop:careloop_secure_password@db:5432/careloop_audit
+    ports:
+      - "8000:8000"
+    depends_on:
+      - gateway
+      - db
+
+  console:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m uvicorn services.console.server:app --host 0.0.0.0 --port 8080
+    container_name: careloop-console
+    environment:
+      - PORT=8080
+      - CONTROL_PLANE_URL=http://control-plane:8000
+      - GATEWAY_URL=http://gateway:8001
+    ports:
+      - "8080:8080"
+    depends_on:
+      - control-plane
+
+volumes:
+  pgdata:
