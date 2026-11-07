@@ -183,6 +183,14 @@ def serve_web_console():
     def serve_index():
         return FileResponse(str(static_path / "index.html"))
 
+    @control_plane_app.get("/style.css")
+    def serve_css():
+        return FileResponse(str(static_path / "style.css"))
+
+    @control_plane_app.get("/app.js")
+    def serve_js():
+        return FileResponse(str(static_path / "app.js"))
+
     print_banner()
     print("\n[WEB SERVER] Starting CareLoop Unified Control Plane & Ops Console...")
     print(" -> Dashboard URL: http://127.0.0.1:8000")
