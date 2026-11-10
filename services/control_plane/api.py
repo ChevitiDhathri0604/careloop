@@ -30,7 +30,18 @@ from services.simulator.replay_engine import replay_engine
 from services.agents import lab_agent, pharmacy_agent, scheduling_agent, billing_agent, outreach_agent
 from services.agents.llm_gateway import llm_gateway
 
-app = FastAPI(title="CareLoop Control Plane", version="2.0.0")
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+# Initialize OpenTelemetry tracer (console exporter for demo; replace with Jaeger in production)
+trace.set_tracer_provider(TracerProvider())
+tracer = trace.get_tracer(__name__)
+span_processor = BatchSpanProcessor(ConsoleSpanExporter())
+trace.get_tracer_provider().add_span_processor(span_processor)
+FastAPIInstrumentor().instrument_app(app)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -126,13 +137,51 @@ def decide_proposal(req: ApprovalDecisionRequest):
         updated = action_ledger.update_proposal_status(req.actionId, new_status, actor=req.clinicianId, notes=req.notes)
         return {"status": "REJECTED", "action": updated}
 
-@app.get("/api/ledger/audit")
-def get_audit_trail():
-    return {
-        "integrityValid": action_ledger.verify_audit_chain(),
-        "entriesCount": len(action_ledger.audit_log),
-        "entries": action_ledger.get_audit_trail()[-50:]
-    }
+
+# ----- Webhook management endpoints -----
+from fastapi import Body, HTTPException
+from typing import Literal
+from fastapi.responses import StreamingResponse
+import csv
+import io
+from services.control_plane.webhook import set_webhook, get_webhook
+
+@app.post("/api/webhook/register")
+def register_webhook(payload: dict = Body(...)):
+    """Register a webhook URL that will receive JSON notifications for safety events.
+    Payload example: {"url": "https://my.endpoint/webhook"}
+    """
+    url = payload.get("url", "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Webhook URL required")
+    set_webhook(url)
+    return {"status": "registered", "url": get_webhook()}
+
+@app.get("/api/webhook/status")
+def webhook_status():
+    """Return the currently registered webhook URL (empty string if none)."""
+    return {"url": get_webhook()}
+
+# ----- Audit ledger export -----
+@app.get("/api/ledger/export")
+def export_ledger(format: Literal["json", "csv"] = "json"):
+    """Export the full audit ledger.
+    * ``format=json`` returns the raw list of entries (FastAPI will JSON‑encode it).
+    * ``format=csv`` streams a CSV file download.
+    """
+    from services.control_plane.ledger import action_ledger
+    data = action_ledger.actions
+    if format == "json":
+        return data
+    # CSV export – stream in‑memory
+    if not data:
+        return []
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=data[0].keys())
+    writer.writeheader()
+    writer.writerows(data)
+    output.seek(0)
+    return StreamingResponse(iter([output.read()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=audit_ledger.csv"})
 
 @app.get("/api/loops")
 def get_loops():

@@ -94,6 +94,13 @@ class LoopTracker:
         return loop
 
     def close_loop(self, loop_id: str, resolution_summary: str) -> Optional[Dict[str, Any]]:
+        """Close a loop and evaluate earned autonomy for agents involved.
+
+        After closing the loop we examine the audit ledger to compute each agent's
+        override rate. If an agent's reject rate is below the configured threshold,
+        we promote its risk tier (earned autonomy). The logic lives in
+        ``AutonomyManager``.
+        """
         if loop_id not in self.loops:
             return None
         loop = self.loops[loop_id]
@@ -111,6 +118,13 @@ class LoopTracker:
                 "resolution": resolution_summary
             }
         )
+        # Trigger autonomy evaluation after the loop is closed
+        try:
+            from .autonomy import AutonomyManager
+            AutonomyManager.evaluate_loop(loop_id)
+        except Exception as e:
+            # Log but do not block loop closure
+            print(f"[LoopTracker] Autonomy evaluation failed: {e}")
         return loop
 
     def check_deadlines(self) -> List[Dict[str, Any]]:
