@@ -23,6 +23,9 @@
           <span class="pulse-dot"></span>
           <span id="auditChainStatus">SHA-256 Audit Chain: VALID</span>
         </div>
+        <button id="btnOpenLLMModal" class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;">
+          ⚙️ LLM Gateway
+        </button>
         <button id="btnRunDemo" class="btn btn-primary glow-button">
           ▶ Run Critical Result Scenario
         </button>
@@ -195,6 +198,77 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- LLM Provider Configuration Modal -->
+  <div id="llmModal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>🧠</span> Real LLM Provider & Gateway Settings
+        </div>
+        <button id="btnCloseLLMModal" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:#94a3b8; font-size:12px; margin-bottom:14px;">
+          Configure live LLM inference for multilingual generation, back-translation, clinical interaction checking, and E2B adverse event extraction.
+        </p>
+        
+        <div class="form-group">
+          <label class="form-label">Active Provider:</label>
+          <select id="llmProviderSelect" class="form-input">
+            <option value="GEMINI">Google Gemini (gemini-1.5-flash / pro)</option>
+            <option value="GROQ">Groq (Ultra-Fast Free Tier: Llama 3.3)</option>
+            <option value="OLLAMA">Ollama Local (Offline / Free localhost:11434)</option>
+            <option value="OPENAI">OpenAI / LiteLLM Proxy</option>
+            <option value="DETERMINISTIC">Deterministic Clinical Baseline (Zero-Cost)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="apiKeyGroup">
+          <label class="form-label">API Key / Token:</label>
+          <input type="password" id="llmApiKey" class="form-input" placeholder="Enter API Key (e.g. AIzaSy... or gsk_...)" />
+          <span style="font-size:11px; color:#64748b;">Keys are kept task-scoped in memory and local .env only.</span>
+        </div>
+
+        <div class="form-group" id="baseUrlGroup">
+          <label class="form-label">Base URL (for Ollama or LiteLLM):</label>
+          <input type="text" id="llmBaseUrl" class="form-input" value="http://localhost:11434" />
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Small Model (Classification):</label>
+            <input type="text" id="llmSmallModel" class="form-input" value="gemini-1.5-flash" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Large Model (Drafting):</label>
+            <input type="text" id="llmLargeModel" class="form-input" value="gemini-1.5-pro" />
+          </div>
+        </div>
+
+        <div class="evidence-box" style="margin-top:12px;">
+          <div class="evidence-title">Live Token & Spend Telemetry:</div>
+          <div style="display:flex; justify-content:space-between; margin-top:4px;">
+            <span>Total Tokens Consumed: <strong id="modalTotalTokens" style="color:#38bdf8;">0</strong></span>
+            <span>Total Spend: <strong id="modalTotalCost" style="color:#34d399;">$0.0000</strong></span>
+          </div>
+        </div>
+
+        <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center;">
+          <button id="btnTestLLMCall" class="btn btn-secondary">
+            ⚡ Test Real LLM Call
+          </button>
+          <button id="btnSaveLLMConfig" class="btn btn-primary">
+            Save Configuration
+          </button>
+        </div>
+
+        <div id="llmTestResult" class="moment-result-box pending" style="margin-top:12px; display:none;">
+          Waiting for test run...
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

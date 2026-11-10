@@ -11,6 +11,7 @@ Exposes endpoints for the entire CareLoop ecosystem:
 """
 
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -27,6 +28,7 @@ from services.safety.pharmacovigilance import pv_bridge
 from services.safety.behaviour_monitor import behaviour_monitor
 from services.simulator.replay_engine import replay_engine
 from services.agents import lab_agent, pharmacy_agent, scheduling_agent, billing_agent, outreach_agent
+from services.agents.llm_gateway import llm_gateway
 
 app = FastAPI(title="CareLoop Control Plane", version="2.0.0")
 
@@ -59,6 +61,16 @@ class KillSwitchRequest(BaseModel):
     agentId: str
     action: str # "QUARANTINE" or "RESTORE"
     reason: Optional[str] = "Manual operator override"
+
+class LLMConfigRequest(BaseModel):
+    provider: str
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    smallModel: Optional[str] = None
+    largeModel: Optional[str] = None
+
+class LLMTestRequest(BaseModel):
+    prompt: str = "Draft a 1-sentence urgent patient alert for hyperkalemia (Potassium 6.4 mEq/L)."
 
 # Endpoints
 @app.get("/health")
@@ -183,6 +195,51 @@ def handle_patient_reply(req: FreeTextInput):
 @app.get("/api/safety/pv-cases")
 def get_pv_cases():
     return pv_bridge.get_all_cases()
+
+@app.get("/api/llm/status")
+def get_llm_status():
+    return llm_gateway.get_status()
+
+@app.post("/api/llm/config")
+def update_llm_config(req: LLMConfigRequest):
+    llm_gateway.set_config(
+        provider=req.provider,
+        api_key=req.apiKey,
+        base_url=req.baseUrl,
+        small_model=req.smallModel,
+        large_model=req.largeModel
+    )
+    # Save to local .env for persistence if key provided
+    if req.apiKey:
+        try:
+            with open(Path(__file__).parent.parent.parent / ".env", "a", encoding="utf-8") as f:
+                if "gemini" in req.provider.lower():
+                    f.write(f"\nGEMINI_API_KEY={req.apiKey}\n")
+                elif "groq" in req.provider.lower():
+                    f.write(f"\nGROQ_API_KEY={req.apiKey}\n")
+                else:
+                    f.write(f"\nOPENAI_API_KEY={req.apiKey}\n")
+        except Exception:
+            pass
+
+    return {"status": "UPDATED", "config": llm_gateway.get_status()}
+
+@app.post("/api/llm/test")
+def test_llm_call(req: LLMTestRequest):
+    data, tokens, provider = llm_gateway.complete(
+        prompt=req.prompt,
+        system_prompt="You are a clinical AI specialist. Provide a brief, professional response.",
+        model_tier="small",
+        agent_id="test-harness"
+    )
+    return {
+        "status": "SUCCESS",
+        "output": data,
+        "tokensUsed": tokens,
+        "provider": provider,
+        "totalTokensConsumed": llm_gateway.total_tokens_consumed,
+        "totalSpendUSD": round(llm_gateway.total_inference_cost_usd, 5)
+    }
 
 @app.post("/api/simulator/run")
 def run_simulation(policy: Optional[Dict[str, Any]] = None):

@@ -21,6 +21,24 @@ class EventBus:
     def subscribe(self, callback: Callable[[Dict[str, Any]], Awaitable[None]]):
         self.subscribers.append(callback)
 
+    def publish_sync(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Synchronous publish — same logic as async publish but no await required.
+        Use this from synchronous code paths (terminal demo, tests, etc.)
+        Skips async subscribers.
+        """
+        self._counter += 1
+        patient_id = event.get("patientId", "GLOBAL")
+
+        enriched_event = {
+            **event,
+            "eventId": f"EVT-{self._counter:06d}",
+            "publishedAt": datetime.utcnow().isoformat() + "Z",
+            "partitionKey": patient_id
+        }
+        self.streams[patient_id].append(enriched_event)
+        return enriched_event
+
     async def publish(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """
         Publishes an event partitioned by patientId, guarantees causal ordering.
@@ -60,3 +78,4 @@ class EventBus:
         return sorted(all_events, key=lambda x: x.get("eventId", ""))
 
 event_bus = EventBus()
+

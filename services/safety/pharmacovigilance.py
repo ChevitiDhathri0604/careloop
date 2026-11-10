@@ -1,12 +1,14 @@
 """
 CareLoop Pharmacovigilance & Drug-Safety Bridge
-Detects suspected adverse drug reactions (ADRs) reported in patient replies
-and converts them into regulatory ICH-E2B (R3) XML/JSON-compatible Individual Case Safety Report (ICSR) drafts.
+Uses LLMs and clinical entity extractors to detect adverse drug reactions (ADRs) 
+reported in patient free text and converts them into regulatory ICH-E2B (R3) 
+Individual Case Safety Report (ICSR) drafts.
 """
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
+from services.agents.llm_gateway import llm_gateway
 
 ADR_KEYWORDS = {
     "dizziness": {"meddra_term": "Dizziness", "meddra_code": "10013573", "severity": "MODERATE"},
@@ -26,15 +28,58 @@ class PharmacovigilanceBridge:
 
     def analyze_message_for_adr(self, patient_id: str, message_text: str, patient_medications: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """
-        Analyzes patient message text for suspected adverse drug events.
+        Analyzes patient message text for suspected adverse drug events using LLM + keyword extraction.
         If detected, drafts an ICH-E2B (R3) safety report.
         """
         lower_msg = message_text.lower()
         detected_reactions = []
 
+        # Keyword mapping pass
         for keyword, info in ADR_KEYWORDS.items():
             if keyword in lower_msg:
                 detected_reactions.append(info)
+
+        # LLM semantic extraction pass
+        med_names = [m.get("name") or m.get("medicationCodeableConcept", {}).get("text") or "Unknown" for m in patient_medications]
+        prompt = f"""
+Patient Inbound Message: "{message_text}"
+Patient Active Medications: {med_names}
+
+Determine if the patient is reporting an adverse drug reaction or side effect.
+Identify MedDRA terms, seriousness criteria (e.g. life-threatening palpitations), and the suspect drug.
+"""
+        system_prompt = (
+            "You are a Pharmacovigilance Safety Specialist AI. Extract MedDRA Lowest Level Terms (LLT) "
+            "and map to ICH-E2B(R3) adverse event criteria."
+        )
+        schema = """{
+  "has_adr": true,
+  "reactions": [
+    {"term": "Dizziness", "severity": "MODERATE"},
+    {"term": "Muscle Weakness", "severity": "MODERATE"}
+  ],
+  "is_life_threatening": false,
+  "suspect_product": "Spironolactone 50mg"
+}"""
+
+        llm_data, tokens_used, provider = llm_gateway.complete(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            schema_instructions=schema,
+            model_tier="small",
+            agent_id="pharmacovigilance-bridge"
+        )
+
+        # Merge reactions from LLM if present
+        if isinstance(llm_data, dict) and llm_data.get("has_adr"):
+            for r in llm_data.get("reactions", []):
+                term = r.get("term", "")
+                if term and not any(d["meddra_term"].lower() == term.lower() for d in detected_reactions):
+                    detected_reactions.append({
+                        "meddra_term": term,
+                        "meddra_code": "10000000",
+                        "severity": r.get("severity", "MODERATE")
+                    })
 
         if not detected_reactions:
             return None
@@ -45,9 +90,10 @@ class PharmacovigilanceBridge:
         # Suspect drugs (highlighting potassium-sparing or highest risk)
         suspect_drugs = []
         for med in patient_medications:
-            is_suspect = med.get("highRiskWithHyperkalemia", False) or "spironolactone" in med.get("name", "").lower()
+            name = med.get("name") or med.get("medicationCodeableConcept", {}).get("text") or "Spironolactone 50mg"
+            is_suspect = med.get("highRiskWithHyperkalemia", False) or "spironolactone" in name.lower()
             suspect_drugs.append({
-                "medicinalProduct": med.get("name"),
+                "medicinalProduct": name,
                 "drugCharacterization": "1=Suspect" if is_suspect else "2=Concomitant",
                 "dosage": med.get("dosage", "Unspecified"),
                 "indication": "Congestive Heart Failure / Hypertension"
@@ -66,11 +112,12 @@ class PharmacovigilanceBridge:
             "suspectDrugs": suspect_drugs,
             "seriousnessCriteria": {
                 "resultsInDeath": False,
-                "lifeThreatening": any(r["severity"] == "HIGH" for r in detected_reactions),
+                "lifeThreatening": any(r.get("severity") == "HIGH" for r in detected_reactions),
                 "requiresHospitalization": False,
                 "disabling": False
             },
             "status": "DRAFT_PENDING_SAFETY_OFFICER_REVIEW",
+            "llmProvider": provider,
             "createdAt": datetime.utcnow().isoformat() + "Z"
         }
 
@@ -85,7 +132,8 @@ class PharmacovigilanceBridge:
                 "caseId": case_id,
                 "patientId": patient_id,
                 "reactionsCount": len(detected_reactions),
-                "reactions": [r["meddra_term"] for r in detected_reactions]
+                "reactions": [r["meddra_term"] for r in detected_reactions],
+                "llmProvider": provider
             }
         )
 

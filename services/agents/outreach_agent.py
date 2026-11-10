@@ -1,6 +1,6 @@
 """
 CareLoop Outreach Agent
-Drafts multilingual clinical outreach messages (Telugu, Hindi, English).
+Drafts multilingual clinical outreach messages (Telugu, Hindi, English) using LLMs.
 Computes clinical back-translation for clinician safety verification.
 Requires Human-in-the-Loop Clinician Sign-off (Risk Tier: T2).
 """
@@ -9,9 +9,7 @@ from typing import Dict, Any, Optional
 from .base import AgentBase
 from services.gateway.mcp_server import execute_mcp_call
 from services.control_plane.ledger import action_ledger
-from services.control_plane.loop_tracker import loop_tracker
 
-# Clinical multilingual templates with certified back-translations
 OUTREACH_TEMPLATES = {
     "te": {
         "language": "Telugu",
@@ -75,16 +73,51 @@ class OutreachAgent(AgentBase):
             pref_lang = comms[0].get("language", {}).get("coding", [{}])[0].get("code", "te")
 
         template = OUTREACH_TEMPLATES.get(pref_lang, OUTREACH_TEMPLATES["en"])
-        
+        target_language_name = template["language"]
+
+        # Call real LLM to draft multilingual outreach and certified back-translation
+        prompt = f"""
+Patient Name: {patient_data.get('name', [{}])[0].get('text', 'Ramesh Kumar')}
+Target Language: {target_language_name} ({pref_lang})
+Critical Finding: Serum Potassium is 6.4 mEq/L (Critical Hyperkalemia, threshold >= 6.0)
+Medication Action: HOLD Spironolactone 50mg immediately
+Urgent Appointment: Tomorrow at 10:30 AM at Cardiology Urgent Clinic
+Emergency Warning: Report to ER immediately if chest pain, palpitations, or severe muscle weakness occurs.
+
+Draft the localized patient SMS in {target_language_name} and provide a certified literal English back-translation.
+"""
+        system_prompt = (
+            "You are an expert clinical communication LLM. Draft compassionate, culturally concordant clinical instructions "
+            "in the requested patient language, and generate an exact certified English back-translation so a supervising "
+            "physician can verify medical accuracy and safety."
+        )
+        schema = """{
+  "draftMessage": "The localized message text in patient preferred language",
+  "certifiedBackTranslation": "The literal English back-translation of the drafted message",
+  "withheldMedication": "Name and dose of withheld medication",
+  "targetLanguage": "Language name"
+}"""
+
+        llm_output, tokens_used, provider = self.call_llm(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            schema_instructions=schema,
+            model_tier="large" # Large model for patient-facing drafting
+        )
+
+        draft_msg = llm_output.get("draftMessage") or llm_output.get("message") or template["message"]
+        back_trans = llm_output.get("certifiedBackTranslation") or llm_output.get("back_translation") or template["back_translation"]
+
         action_id = f"ACT-OUTREACH-{task_id[-6:]}"
         payload = {
             "recipientPhone": patient_data.get("telecom", [{}])[0].get("value", "+91-9876543210"),
-            "targetLanguage": template["language"],
+            "targetLanguage": target_language_name,
             "languageCode": pref_lang,
-            "draftMessage": template["message"],
-            "certifiedBackTranslation": template["back_translation"],
+            "draftMessage": draft_msg,
+            "certifiedBackTranslation": back_trans,
             "withheldMedication": "Spironolactone 50mg daily",
-            "clinicalUrgency": "CRITICAL_HYPERKALEMIA (6.4 mEq/L)"
+            "clinicalUrgency": "CRITICAL_HYPERKALEMIA (6.4 mEq/L)",
+            "llmProvider": provider
         }
 
         # Propose action: T2 Risk Tier -> Requires Clinician Human-in-the-Loop Sign-off
@@ -98,7 +131,8 @@ class OutreachAgent(AgentBase):
             evidence={
                 "labFinding": "Potassium 6.4 mEq/L",
                 "drugInteraction": "Spironolactone 50mg (Potassium-sparing)",
-                "targetLanguage": template["language"]
+                "targetLanguage": target_language_name,
+                "llmProvider": provider
             }
         )
 
@@ -110,7 +144,8 @@ class OutreachAgent(AgentBase):
             "status": "PENDING_APPROVAL",
             "riskTier": "T2",
             "proposal": proposal,
-            "tokensUsed": 450
+            "llmProvider": provider,
+            "tokensUsed": tokens_used
         }
 
 outreach_agent = OutreachAgent()
