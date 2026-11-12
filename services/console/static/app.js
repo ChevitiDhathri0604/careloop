@@ -32,10 +32,10 @@ const mockState = {
   pvCases: []
 };
 
-async function fetchJSON(url, options = {}) {
+async function fetchJSON(url, options = {}, timeoutMs = 8000) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(`${API_BASE}${url}`, {
       ...options,
       signal: controller.signal,
@@ -46,7 +46,7 @@ async function fetchJSON(url, options = {}) {
     isLiveBackend = true;
     return await res.json();
   } catch (err) {
-    isLiveBackend = false;
+    console.warn(`[CareLoop] Call to ${url} failed:`, err.message || err);
     return null;
   }
 }

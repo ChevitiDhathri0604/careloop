@@ -146,6 +146,14 @@ def decide_proposal(req: ApprovalDecisionRequest):
         updated = action_ledger.update_proposal_status(req.actionId, new_status, actor=req.clinicianId, notes=req.notes)
         return {"status": "REJECTED", "action": updated}
 
+@app.get("/api/ledger/audit")
+def get_audit_trail():
+    return {
+        "integrityValid": action_ledger.verify_audit_chain(),
+        "entriesCount": len(action_ledger.audit_log),
+        "entries": action_ledger.get_audit_trail()[-50:]
+    }
+
 
 # ----- Webhook management endpoints -----
 from fastapi import Body, HTTPException

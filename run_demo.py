@@ -237,15 +237,15 @@ def serve_web_console():
 
     @control_plane_app.get("/")
     def serve_index():
-        return FileResponse(str(static_path / "index.html"))
+        return FileResponse(str(static_path / "index.html"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     @control_plane_app.get("/style.css")
     def serve_css():
-        return FileResponse(str(static_path / "style.css"))
+        return FileResponse(str(static_path / "style.css"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     @control_plane_app.get("/app.js")
     def serve_js():
-        return FileResponse(str(static_path / "app.js"))
+        return FileResponse(str(static_path / "app.js"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     banner("CARELOOP WEB DASHBOARD STARTING\n"
            "  Dashboard:  http://127.0.0.1:8000\n"
