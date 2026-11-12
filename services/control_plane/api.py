@@ -30,17 +30,26 @@ from services.simulator.replay_engine import replay_engine
 from services.agents import lab_agent, pharmacy_agent, scheduling_agent, billing_agent, outreach_agent
 from services.agents.llm_gateway import llm_gateway
 
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+app = FastAPI(
+    title="CareLoop Control Plane & Safety Gate",
+    version="2.0.0",
+    description="Autonomous Clinical Safety Control Plane with Cryptographic Audit Trail"
+)
 
-# Initialize OpenTelemetry tracer (console exporter for demo; replace with Jaeger in production)
-trace.set_tracer_provider(TracerProvider())
-tracer = trace.get_tracer(__name__)
-span_processor = BatchSpanProcessor(ConsoleSpanExporter())
-trace.get_tracer_provider().add_span_processor(span_processor)
-FastAPIInstrumentor().instrument_app(app)
+# Optional OpenTelemetry instrumentation
+try:
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    trace.set_tracer_provider(TracerProvider())
+    tracer = trace.get_tracer(__name__)
+    span_processor = BatchSpanProcessor(ConsoleSpanExporter())
+    trace.get_tracer_provider().add_span_processor(span_processor)
+    FastAPIInstrumentor().instrument_app(app)
+except Exception:
+    pass
 
 
 app.add_middleware(
@@ -163,25 +172,29 @@ def webhook_status():
     return {"url": get_webhook()}
 
 # ----- Audit ledger export -----
-@app.get("/api/ledger/export")
-def export_ledger(format: Literal["json", "csv"] = "json"):
-    """Export the full audit ledger.
-    * ``format=json`` returns the raw list of entries (FastAPI will JSON‑encode it).
-    * ``format=csv`` streams a CSV file download.
-    """
-    from services.control_plane.ledger import action_ledger
-    data = action_ledger.actions
-    if format == "json":
-        return data
-    # CSV export – stream in‑memory
-    if not data:
-        return []
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=data[0].keys())
-    writer.writeheader()
-    writer.writerows(data)
-    output.seek(0)
-    return StreamingResponse(iter([output.read()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=audit_ledger.csv"})
+
+# ----- Debug / Negative scenario endpoints -----
+from services.control_plane.negative_scenarios import (
+    run_autonomy_negative_scenario,
+    test_webhook_failure,
+    test_llm_failure,
+)
+
+@app.get("/api/debug/negative_autonomy")
+def debug_negative_autonomy():
+    """Run a loop where every proposal is rejected to demonstrate no autonomy earned."""
+    return run_autonomy_negative_scenario()
+
+@app.get("/api/debug/webhook_failure")
+def debug_webhook_failure():
+    """Trigger a webhook delivery failure and return the error info."""
+    return test_webhook_failure()
+
+@app.get("/api/debug/llm_fallback")
+def debug_llm_fallback():
+    """Force the LLM gateway into deterministic fallback and show the response."""
+    return test_llm_failure()
+
 
 @app.get("/api/loops")
 def get_loops():
