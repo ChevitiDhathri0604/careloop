@@ -756,6 +756,59 @@ function initLLMModal() {
   }
 }
 
+// 14. Audience Lens Switcher (Story vs Clinician vs Scientist)
+function initLensSwitcher() {
+  const btnStory = document.getElementById("btnLensStory");
+  const btnClinician = document.getElementById("btnLensClinician");
+  const btnScientist = document.getElementById("btnLensScientist");
+
+  const viewStory = document.getElementById("viewStory");
+  const viewClinician = document.getElementById("viewClinician");
+  const viewScientist = document.getElementById("viewScientist");
+
+  const buttons = [btnStory, btnClinician, btnScientist];
+  const views = [viewStory, viewClinician, viewScientist];
+
+  function setLens(lens) {
+    buttons.forEach(b => { if (b) b.classList.remove("active"); });
+    views.forEach(v => { if (v) v.classList.add("hidden"); });
+
+    if (lens === "story") {
+      if (btnStory) btnStory.classList.add("active");
+      if (viewStory) viewStory.classList.remove("hidden");
+    } else if (lens === "scientist") {
+      if (btnScientist) btnScientist.classList.add("active");
+      if (viewScientist) viewScientist.classList.remove("hidden");
+    } else {
+      if (btnClinician) btnClinician.classList.add("active");
+      if (viewClinician) viewClinician.classList.remove("hidden");
+    }
+  }
+
+  if (btnStory) btnStory.addEventListener("click", () => setLens("story"));
+  if (btnClinician) btnClinician.addEventListener("click", () => setLens("clinician"));
+  if (btnScientist) btnScientist.addEventListener("click", () => setLens("scientist"));
+}
+
+// 15. Microsoft Well-Architected Framework (WAR) Modal
+function initWARModal() {
+  const modal = document.getElementById("warModal");
+  const btnOpen = document.getElementById("btnOpenWARModal");
+  const btnClose = document.getElementById("btnCloseWARModal");
+  const btnDismiss = document.getElementById("btnDismissWAR");
+
+  if (!modal) return;
+
+  const closeModal = () => { modal.style.display = "none"; };
+  if (btnOpen) btnOpen.addEventListener("click", () => { modal.style.display = "flex"; });
+  if (btnClose) btnClose.addEventListener("click", closeModal);
+  if (btnDismiss) btnDismiss.addEventListener("click", closeModal);
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+}
+
 // Global initialization
 document.addEventListener("DOMContentLoaded", () => {
   const btnRun = document.getElementById("btnRunDemo");
@@ -771,6 +824,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initDebugButtons();
   initLLMModal();
   initDiagModal();
+  initLensSwitcher();
+  initWARModal();
 
   refreshAll();
   setInterval(refreshAll, 3000);
