@@ -799,13 +799,46 @@ function initWARModal() {
 
   if (!modal) return;
 
-  const closeModal = () => { modal.style.display = "none"; };
-  if (btnOpen) btnOpen.addEventListener("click", () => { modal.style.display = "flex"; });
-  if (btnClose) btnClose.addEventListener("click", closeModal);
-  if (btnDismiss) btnDismiss.addEventListener("click", closeModal);
+  const closeModal = () => {
+    modal.style.display = "none";
+  };
+
+  if (btnOpen) {
+    btnOpen.addEventListener("click", (e) => {
+      e.preventDefault();
+      modal.style.display = "flex";
+    });
+  }
+
+  if (btnClose) {
+    btnClose.addEventListener("click", (e) => {
+      e.preventDefault();
+      closeModal();
+    });
+  }
+
+  if (btnDismiss) {
+    btnDismiss.addEventListener("click", (e) => {
+      e.preventDefault();
+      closeModal();
+    });
+  }
 
   modal.addEventListener("click", (e) => {
-    if (e.target === modal) closeModal();
+    if (e.target === modal) {
+      closeModal();
+    }
+  });
+
+  // Escape key closes modal
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" || e.key === "Esc") {
+      closeModal();
+      const diagModal = document.getElementById("diagModal");
+      const llmModal = document.getElementById("llmModal");
+      if (diagModal) diagModal.style.display = "none";
+      if (llmModal) llmModal.style.display = "none";
+    }
   });
 }
 

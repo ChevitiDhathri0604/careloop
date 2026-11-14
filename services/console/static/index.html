@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CareLoop | Autonomous Clinical Safety Control Plane & Well-Architected Engine</title>
-  <link rel="stylesheet" href="style.css?v=2.3">
+  <link rel="stylesheet" href="style.css?v=2.4">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -496,7 +496,7 @@
         <div class="modal-title">
           <span>🏛️</span> Microsoft Well-Architected Review (WAR) Assessment
         </div>
-        <button id="btnCloseWARModal" class="modal-close">&times;</button>
+        <button id="btnCloseWARModal" class="modal-close" title="Close Review" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
         <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">
@@ -546,10 +546,12 @@
             </div>
           </div>
         </div>
-
-        <div style="display:flex; justify-content:flex-end; margin-top:16px;">
-          <button id="btnDismissWAR" class="btn btn-primary btn-xs" style="padding:6px 18px;">Close Review</button>
-        </div>
+      </div>
+      <div class="modal-footer">
+        <span style="font-size:12px; color:#94a3b8;">Press <kbd style="background:#0f172a; padding:2px 6px; border-radius:4px; border:1px solid #334155;">Esc</kbd> or click outside to dismiss</span>
+        <button id="btnDismissWAR" class="btn btn-primary" style="padding:8px 22px; font-weight:700;">
+          ✕ Close Review & Return
+        </button>
       </div>
     </div>
   </div>
@@ -653,6 +655,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=2.3"></script>
+  <script src="app.js?v=2.4"></script>
 </body>
 </html>
