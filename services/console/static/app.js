@@ -756,24 +756,29 @@ function initLLMModal() {
   }
 }
 
-// 14. Audience Lens Switcher (Story vs Clinician vs Scientist)
+// 14. Audience Lens Switcher & Welcome Portal Navigation
 function initLensSwitcher() {
+  const btnPortal = document.getElementById("btnLensPortal");
   const btnStory = document.getElementById("btnLensStory");
   const btnClinician = document.getElementById("btnLensClinician");
   const btnScientist = document.getElementById("btnLensScientist");
 
+  const viewLanding = document.getElementById("viewLanding");
   const viewStory = document.getElementById("viewStory");
   const viewClinician = document.getElementById("viewClinician");
   const viewScientist = document.getElementById("viewScientist");
 
-  const buttons = [btnStory, btnClinician, btnScientist];
-  const views = [viewStory, viewClinician, viewScientist];
+  const buttons = [btnPortal, btnStory, btnClinician, btnScientist];
+  const views = [viewLanding, viewStory, viewClinician, viewScientist];
 
   function setLens(lens) {
     buttons.forEach(b => { if (b) b.classList.remove("active"); });
     views.forEach(v => { if (v) v.classList.add("hidden"); });
 
-    if (lens === "story") {
+    if (lens === "portal") {
+      if (btnPortal) btnPortal.classList.add("active");
+      if (viewLanding) viewLanding.classList.remove("hidden");
+    } else if (lens === "story") {
       if (btnStory) btnStory.classList.add("active");
       if (viewStory) viewStory.classList.remove("hidden");
     } else if (lens === "scientist") {
@@ -783,11 +788,30 @@ function initLensSwitcher() {
       if (btnClinician) btnClinician.classList.add("active");
       if (viewClinician) viewClinician.classList.remove("hidden");
     }
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  if (btnPortal) btnPortal.addEventListener("click", () => setLens("portal"));
   if (btnStory) btnStory.addEventListener("click", () => setLens("story"));
   if (btnClinician) btnClinician.addEventListener("click", () => setLens("clinician"));
   if (btnScientist) btnScientist.addEventListener("click", () => setLens("scientist"));
+
+  // Welcome Portal Gateway Card clicks
+  const cardClinician = document.getElementById("portalCardClinician");
+  const cardStory = document.getElementById("portalCardStory");
+  const cardScientist = document.getElementById("portalCardScientist");
+
+  if (cardClinician) cardClinician.addEventListener("click", () => setLens("clinician"));
+  if (cardStory) cardStory.addEventListener("click", () => setLens("story"));
+  if (cardScientist) cardScientist.addEventListener("click", () => setLens("scientist"));
+
+  // Logo badge returns to Welcome Portal
+  const brandEl = document.querySelector(".brand");
+  if (brandEl) {
+    brandEl.style.cursor = "pointer";
+    brandEl.title = "Return to Welcome Portal";
+    brandEl.addEventListener("click", () => setLens("portal"));
+  }
 }
 
 // 15. Microsoft Well-Architected Framework (WAR) Modal

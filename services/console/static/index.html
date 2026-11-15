@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CareLoop | Autonomous Clinical Safety Control Plane & Well-Architected Engine</title>
-  <link rel="stylesheet" href="style.css?v=2.4">
+  <link rel="stylesheet" href="style.css?v=2.5">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -48,20 +48,102 @@
     <!-- Multi-Perspective Audience Lens Switcher -->
     <section class="lens-bar">
       <div class="lens-label">
-        <span>👁️ Audience Perspective:</span>
+        <span>👁️ Navigation & Perspectives:</span>
       </div>
       <div class="lens-buttons">
-        <button class="lens-btn" id="btnLensStory" data-lens="story">
-          🧒 1. Story & Metaphor (Child to Layman)
+        <button class="lens-btn" id="btnLensPortal" data-lens="portal">
+          🏠 Welcome Portal
         </button>
         <button class="lens-btn active" id="btnLensClinician" data-lens="clinician">
-          🩺 2. Clinician Operations (Live Control Plane)
+          🩺 Live Operations Console
+        </button>
+        <button class="lens-btn" id="btnLensStory" data-lens="story">
+          🧒 Child & Layman Story
         </button>
         <button class="lens-btn" id="btnLensScientist" data-lens="scientist">
-          🔬 3. Scientist & Architect (WAR & Token Scorecard)
+          🔬 Scientist & WAR Review
         </button>
       </div>
     </section>
+
+    <!-- =========================================================================
+         VIEW 0: 🏠 ANIMATED WELCOME PORTAL & FRONT PAGE
+         ========================================================================= -->
+    <div id="viewLanding" class="perspective-view hidden">
+      <section class="landing-portal">
+        <div class="portal-hero">
+          <div class="hero-badge-wrap">
+            <div class="hero-badge">☤</div>
+            <div class="pulse-ring"></div>
+          </div>
+          <h1 class="hero-title">
+            <span class="gradient-text">CareLoop</span> Clinical Safety Control Plane
+          </h1>
+          <p class="hero-sub">
+            Guarding post-discharge patients when critical lab results arrive. Coordinating autonomous agents, freezing commercial billing conflicts, and enforcing clinician sign-offs with tamper-proof cryptographic audit trails.
+          </p>
+        </div>
+
+        <!-- 3 Interactive Gateway Cards -->
+        <div class="portal-cards-grid">
+          <!-- Card 1 -->
+          <div class="portal-card" id="portalCardClinician">
+            <div class="portal-card-icon">🩺</div>
+            <div class="portal-card-title">Live Clinician Operations</div>
+            <div class="portal-card-desc">
+              Monitor active clinical loops, approve T2 Telugu outreach messages with certified back-translation, inspect live safety moments, and manage agent kill-switches.
+            </div>
+            <div class="portal-card-action">
+              <span>Launch Control Plane</span> ➔
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="portal-card" id="portalCardStory">
+            <div class="portal-card-icon">🧒</div>
+            <div class="portal-card-title">Story & Metaphor (Child to Layman)</div>
+            <div class="portal-card-desc">
+              Understand the clinical safety loop through the friendly story of Uncle Ramesh, the 5 hospital robot guardians, the red light billing stop, and why doctors hold the golden key.
+            </div>
+            <div class="portal-card-action">
+              <span>Read Illustrated Story</span> ➔
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="portal-card" id="portalCardScientist">
+            <div class="portal-card-icon">🔬</div>
+            <div class="portal-card-title">Microsoft WAR & Enterprise Architecture</div>
+            <div class="portal-card-desc">
+              Deep dive into the 5-pillar Microsoft Well-Architected Framework review, Level 3 agentic maturity framework, zero-trust RBAC access controls, and 91% token optimization.
+            </div>
+            <div class="portal-card-action">
+              <span>Explore Architecture Center</span> ➔
+            </div>
+          </div>
+        </div>
+
+        <!-- High-Tech Stats Bar -->
+        <div class="portal-stats-bar">
+          <div class="portal-stat-item">
+            <span class="portal-stat-dot"></span>
+            <span><strong>60-min</strong> Emergency SLA</span>
+          </div>
+          <div class="portal-stat-item">
+            <span class="portal-stat-dot"></span>
+            <span><strong>100%</strong> Tamper-Proof SHA-256 Ledger</span>
+          </div>
+          <div class="portal-stat-item">
+            <span class="portal-stat-dot"></span>
+            <span><strong>91.2%</strong> Token Cost Optimization</span>
+          </div>
+          <div class="portal-stat-item">
+            <span class="portal-stat-dot"></span>
+            <span><strong>Zero</strong> Unearned Autonomy Leaks</span>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <!-- =========================================================================
          VIEW 1: 🧒 STORY & METAPHOR (Child to Layman View)
@@ -655,6 +737,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=2.4"></script>
+  <script src="app.js?v=2.5"></script>
 </body>
 </html>
