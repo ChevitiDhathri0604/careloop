@@ -23,8 +23,14 @@ class AgentBase:
         self.steps_taken = 0
         self.tokens_used_in_task = 0
 
+    def reset_task(self):
+        """Resets per-task counter."""
+        self.steps_taken = 0
+        self.tokens_used_in_task = 0
+
     def get_scoped_token(self, task_id: str, patient_id: str, required_scopes: List[str]) -> str:
-        """Requests task-scoped token from MCP gateway."""
+        """Requests task-scoped token from MCP gateway and resets per-task counters."""
+        self.reset_task()
         return token_manager.generate_task_token(
             agent_id=self.agent_id,
             task_id=task_id,

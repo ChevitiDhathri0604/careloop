@@ -12,7 +12,8 @@ Exposes endpoints for the entire CareLoop ecosystem:
 
 from typing import Dict, Any, List, Optional
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, UploadFile, File, Query, Response
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -380,3 +381,141 @@ async def run_full_demo():
         "metrics": loop_tracker.get_metrics(),
         "auditChainValid": action_ledger.verify_audit_chain()
     }
+
+
+# ---------------------------------------------------------------------------
+# PATIENT MANAGEMENT & CLINICAL LOOP PIPELINE ENDPOINTS
+# ---------------------------------------------------------------------------
+from services.db.database import db
+from services.control_plane.pipeline import process_patient_clinical_loop
+from services.control_plane.bulk_processor import bulk_processor
+
+class PatientCreateRequest(BaseModel):
+    id: Optional[str] = None
+    name: str
+    birth_date: Optional[str] = None
+    gender: Optional[str] = "unknown"
+    phone: Optional[str] = None
+    preferred_language: Optional[str] = "en"
+    discharge_date: Optional[str] = None
+    discharge_unit: Optional[str] = "Ambulatory Stepdown"
+    attending_physician: Optional[str] = "Dr. Jenkins, MD"
+    diagnosis: Optional[str] = "Post-discharge follow-up"
+    potassium: Optional[float] = 4.5
+    medications: Optional[Any] = []
+    billing_amount: Optional[float] = 1250.0
+
+@app.get("/api/patients")
+def list_patients(q: Optional[str] = Query(None), limit: int = 200, offset: int = 0):
+    patients = db.list_patients(query=q, limit=limit, offset=offset)
+    return {"total": len(patients), "patients": patients}
+
+@app.get("/api/patients/{patient_id}")
+def get_patient_detail(patient_id: str):
+    p = db.get_patient(patient_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    loops = db.get_loops_for_patient(patient_id)
+    props = action_ledger.get_proposals(patient_id)
+    return {
+        "patient": p,
+        "loops": loops,
+        "proposals": props
+    }
+
+@app.post("/api/patients")
+def create_or_update_patient(req: PatientCreateRequest, auto_run: bool = Query(True)):
+    data = req.dict()
+    if auto_run:
+        result = process_patient_clinical_loop(data)
+        saved = db.get_patient(result["patientId"])
+        return {"status": "SUCCESS", "patient": saved, "analysis": result}
+    else:
+        saved = db.save_patient(data)
+        return {"status": "SAVED", "patient": saved}
+
+@app.put("/api/patients/{patient_id}")
+def update_patient(patient_id: str, req: Dict[str, Any] = Body(...)):
+    existing = db.get_patient(patient_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    req["id"] = patient_id
+    updated = db.save_patient(req)
+    return {"status": "UPDATED", "patient": updated}
+
+@app.delete("/api/patients/{patient_id}")
+def delete_patient(patient_id: str):
+    success = db.delete_patient(patient_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {"status": "DELETED", "patientId": patient_id}
+
+@app.post("/api/patients/{patient_id}/analyze")
+def analyze_patient(patient_id: str):
+    p = db.get_patient(patient_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    result = process_patient_clinical_loop(p)
+    return {"status": "ANALYZED", "result": result}
+
+# ---------------------------------------------------------------------------
+# BULK INGESTION & REPORT EXPORT ENDPOINTS
+# ---------------------------------------------------------------------------
+@app.post("/api/bulk/upload")
+async def bulk_upload(file: UploadFile = File(...)):
+    content_bytes = await file.read()
+    if not content_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    try:
+        report = bulk_processor.process_batch(file.filename, content_bytes)
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Processing failed: {str(e)}")
+
+@app.get("/api/bulk/export")
+def export_bulk_results(format: str = Query("csv")):
+    if format.lower() == "xlsx":
+        excel_bytes = bulk_processor.export_results_excel()
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="careloop_batch_results.xlsx"'}
+        )
+    else:
+        csv_text = bulk_processor.export_results_csv()
+        return Response(
+            content=csv_text,
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="careloop_batch_results.csv"'}
+        )
+
+@app.get("/api/bulk/template/{file_format}")
+def download_sample_template(file_format: str):
+    fmt = file_format.lower()
+    tmpl_dir = Path(__file__).parent.parent.parent / "data" / "templates"
+    if fmt == "csv":
+        path = tmpl_dir / "careloop_sample_dataset.csv"
+        media = "text/csv"
+    elif fmt in ["xlsx", "excel"]:
+        path = tmpl_dir / "careloop_sample_dataset.xlsx"
+        media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif fmt == "json":
+        path = tmpl_dir / "careloop_sample_dataset.json"
+        media = "application/json"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid format. Choose csv, xlsx, or json.")
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Template file not found.")
+
+    return FileResponse(
+        str(path),
+        media_type=media,
+        filename=path.name,
+        headers={"Content-Disposition": f'attachment; filename="{path.name}"'}
+    )
+
+@app.get("/api/bulk/analytics")
+def get_bulk_analytics():
+    return db.get_analytics()
+

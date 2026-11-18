@@ -92,8 +92,8 @@ def call_tool(req: MCPToolRequest, authorization: Optional[str] = Header(None)):
         masked_meds = [
             {
                 "id": m["id"],
-                "name": m["medicationCodeableConcept"]["text"],
-                "code": m["medicationCodeableConcept"]["coding"][0]["code"],
+                "name": m.get("medicationCodeableConcept", {}).get("text") or m.get("name", "Unknown"),
+                "code": (m.get("medicationCodeableConcept", {}).get("coding", [{}])[0].get("code") or "RXNORM-GENERIC"),
                 "class": m.get("clinicalClass"),
                 "highRiskWithHyperkalemia": m.get("highRiskWithHyperkalemia", False)
             }

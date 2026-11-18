@@ -236,6 +236,12 @@ def serve_web_console():
     control_plane_app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
     @control_plane_app.get("/")
+    @control_plane_app.get("/portal")
+    @control_plane_app.get("/individual")
+    @control_plane_app.get("/bulk")
+    @control_plane_app.get("/console")
+    @control_plane_app.get("/story")
+    @control_plane_app.get("/scientist")
     def serve_index():
         return FileResponse(str(static_path / "index.html"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
@@ -247,11 +253,15 @@ def serve_web_console():
     def serve_js():
         return FileResponse(str(static_path / "app.js"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
-    banner("CARELOOP WEB DASHBOARD STARTING\n"
-           "  Dashboard:  http://127.0.0.1:8000\n"
-           "  API Docs:   http://127.0.0.1:8000/docs\n"
-           "  Press Ctrl+C to stop.")
-    uvicorn.run(control_plane_app, host="127.0.0.1", port=8000, log_level="info")
+    import os
+    server_host = os.environ.get("HOST", "127.0.0.1")
+    server_port = int(os.environ.get("PORT", "8000"))
+
+    banner(f"CARELOOP WEB DASHBOARD STARTING\n"
+           f"  Dashboard:  http://{server_host}:{server_port}\n"
+           f"  API Docs:   http://{server_host}:{server_port}/docs\n"
+           f"  Press Ctrl+C to stop.")
+    uvicorn.run(control_plane_app, host=server_host, port=server_port, log_level="info")
 
 
 # ---------------------------------------------------------------------------
