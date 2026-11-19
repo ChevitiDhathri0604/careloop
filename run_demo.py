@@ -254,7 +254,7 @@ def serve_web_console():
         return FileResponse(str(static_path / "app.js"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     import os
-    server_host = os.environ.get("HOST", "127.0.0.1")
+    server_host = os.environ.get("HOST", "0.0.0.0")
     server_port = int(os.environ.get("PORT", "8000"))
 
     banner(f"CARELOOP WEB DASHBOARD STARTING\n"
