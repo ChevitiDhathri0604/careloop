@@ -267,14 +267,86 @@ class LLMGateway:
             return {"raw_output": text}
 
     def _fallback_deterministic(self, prompt: str, agent_id: str) -> Tuple[Dict[str, Any], int]:
-        """Safe clinical deterministic reasoning baseline"""
+        """Safe clinical deterministic reasoning baseline with dynamic patient personalization"""
         tokens = int(len(prompt.split()) * 1.3) + 120
         if "outreach" in agent_id:
+            # 1. Extract patient name from prompt
+            pname = "Patient"
+            name_match = re.search(r"Patient Name:\s*([^\n\r]+)", prompt)
+            if name_match:
+                cand = name_match.group(1).strip()
+                if cand and cand.lower() not in ["unknown", "none", ""]:
+                    pname = cand
+
+            # 2. Extract target language from prompt
+            target_lang = "Telugu"
+            lang_match = re.search(r"Target Language:\s*([^\n\r(]+)", prompt)
+            if lang_match:
+                target_lang = lang_match.group(1).strip()
+
+            # 3. Extract potassium value
+            k_val = "6.4"
+            k_match = re.search(r"Potassium is\s*([0-9.]+)", prompt)
+            if k_match:
+                k_val = k_match.group(1).strip()
+
+            # 4. Extract medication name
+            med_match = re.search(r"Medication Action:\s*HOLD\s*([^\n\r]+?)(?:\s+immediately|$)", prompt, re.IGNORECASE)
+            med_name = med_match.group(1).strip() if med_match else "Spironolactone 50mg"
+
+            # 5. Formulate culturally concordant message addressing the specific patient
+            tl_lower = target_lang.lower()
+            if "hindi" in tl_lower or tl_lower == "hi":
+                msg = (
+                    f"नमस्ते {pname} जी। आपके डिस्चार्ज के बाद के रक्त परीक्षण में पोटेशियम का स्तर गंभीर रूप से अधिक ({k_val} mEq/L) पाया गया है। "
+                    f"कृपया डॉक्टर से बात करने तक अपनी {med_name} दवा न लें। "
+                    "कल सुबह 10:30 बजे कार्डियोलॉजी क्लिनिक में आपके लिए एक जरूरी अपॉइंटमेंट बुक किया गया है। "
+                    "यदि आपको सीने में दर्द, घबराहट या अत्यधिक कमजोरी महसूस हो, तो तुरंत आपातकालीन कक्ष (ER) जाएं।"
+                )
+                back_trans = (
+                    f"Hello {pname}. In your post-discharge blood test, potassium levels were found critically high ({k_val} mEq/L). "
+                    f"Please do NOT take your {med_name} medicine until you speak with your doctor. "
+                    "An urgent appointment has been booked for you tomorrow at 10:30 AM at the Cardiology Clinic. "
+                    "If you experience chest pain, palpitations, or extreme weakness, visit the Emergency Room (ER) immediately."
+                )
+            elif "english" in tl_lower or tl_lower == "en":
+                msg = (
+                    f"Hello {pname}. Your clinical care team identified a critical lab result from your discharge lab work: "
+                    f"Serum Potassium is {k_val} mEq/L (Critical High). Please immediately HOLD your {med_name} medication until evaluated. "
+                    "An urgent cardiology follow-up visit is reserved for tomorrow at 10:30 AM. "
+                    "If you experience chest tightness, irregular heartbeat, or severe muscle weakness, proceed to the nearest Emergency Room immediately."
+                )
+                back_trans = (
+                    f"Direct English clinical communication for {pname} with explicit medication withhold directive for {med_name} and emergency warnings."
+                )
+            elif "spanish" in tl_lower or tl_lower == "es":
+                msg = (
+                    f"Hola {pname}. Su equipo de atención clínica identificó un resultado crítico: el potasio sérico es de {k_val} mEq/L. "
+                    f"Por favor suspenda de inmediato su medicamento {med_name} hasta nueva evaluación. "
+                    "Se ha reservado una cita urgente para mañana a las 10:30 AM en la Clínica de Cardiología."
+                )
+                back_trans = f"Hello {pname}. Critical potassium result of {k_val} mEq/L detected. Please hold {med_name} until consultation."
+            else:  # Default Telugu with exact patient name
+                msg = (
+                    f"నమస్కారం {pname} గారు. మీ డిశ్చార్జ్ తర్వాత వచ్చిన రక్త పరీక్షలో పొటాషియం స్థాయి ఎక్కువగా ({k_val} mEq/L) ఉన్నట్లు డాక్టర్ గుర్తించారు. "
+                    f"దయచేసి తదుపరి డాక్టర్ సంప్రదింపుల వరకు మీ {med_name} మాత్రను వేసుకోవద్దు. "
+                    "రేపు ఉదయం 10:30 గంటలకు కార్డియాలజీ క్లినిక్‌లో అత్యవసర అపాయింట్‌మెంట్ బుక్ చేయబడింది. "
+                    "ఛాతీ నొప్పి, గుండె దడ లేదా తీవ్రమైన నీరసం ఉంటే వెంటనే అత్యవసర విభాగానికి (ER) వెళ్ళండి."
+                )
+                back_trans = (
+                    f"Hello {pname}. Your doctor has noted that your post-discharge blood test shows high potassium levels ({k_val} mEq/L). "
+                    f"Please do NOT take your {med_name} tablet until further consultation with your doctor. "
+                    "An urgent follow-up appointment has been booked for you tomorrow at 10:30 AM at the Cardiology Clinic. "
+                    "If you experience chest pain, palpitations, or severe weakness, go to the Emergency Room (ER) immediately."
+                )
+
             return {
-                "message": "నమస్కారం రమేష్ కుమార్ గారు. మీ డిశ్చార్జ్ తర్వాత రక్త పరీక్షలో పొటాషియం స్థాయి ఎక్కువగా (6.4 mEq/L) ఉంది. దయచేసి మీ స్పైరోనోలాక్టోన్ మాత్ర వేసుకోవద్దు. రేపు 10:30 గంటలకు అపాయింట్‌మెంట్ బుక్ చేయబడింది.",
-                "back_translation": "Hello Mr. Ramesh Kumar. In your post-discharge blood test, potassium was critically high (6.4 mEq/L). Please HOLD your Spironolactone tablet. An urgent cardiology consult is booked for tomorrow at 10:30 AM.",
-                "language": "Telugu",
-                "withheld_medication": "Spironolactone 50mg"
+                "message": msg,
+                "draftMessage": msg,
+                "back_translation": back_trans,
+                "certifiedBackTranslation": back_trans,
+                "language": target_lang,
+                "withheld_medication": med_name
             }, tokens
         elif "pharmacy" in agent_id:
             return {

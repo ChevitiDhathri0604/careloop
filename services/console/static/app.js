@@ -182,11 +182,11 @@ async function refreshInbox() {
         </div>
         <div class="message-preview">
           <strong>Proposed Outbound Patient Message (${payload.targetLanguage || 'Telugu'}):</strong><br/>
-          ${payload.draftMessage || 'నమస్కారం రమేష్ కుమార్ గారు. మీ రక్త పరీక్షలో పొటాషియం స్థాయి ఎక్కువగా (6.4 mEq/L) ఉంది. దయచేసి తదుపరి డాక్టర్ సంప్రదింపుల వరకు మీ స్పైరోనోలాక్టోన్ మాత్రను ఆపండి.'}
+          ${payload.draftMessage || `నమస్కారం ${payload.patientName || p.patientName || p.patientId || 'పేషెంట్'} గారు. మీ రక్త పరీక్షలో పొటాషియం స్థాయి ఎక్కువగా (6.4 mEq/L) ఉంది. దయచేసి తదుపరి డాక్టర్ సంప్రదింపుల వరకు మీ స్పైరోనోలాక్టోన్ మాత్రను ఆపండి.`}
         </div>
         <div class="back-translation">
           <strong>Certified Back-Translation for Clinician Verification:</strong><br/>
-          "${payload.certifiedBackTranslation || 'Hello Mr. Ramesh Kumar. Your blood test shows high potassium levels (6.4 mEq/L). Please stop taking your Spironolactone medication until further doctor consultation.'}"
+          "${payload.certifiedBackTranslation || payload.backTranslation || `Hello ${payload.patientName || p.patientName || p.patientId || 'Patient'}. Your blood test shows high potassium levels (6.4 mEq/L). Please stop taking your Spironolactone medication until further doctor consultation.`}"
         </div>
         <div class="action-buttons">
           <button class="btn btn-approve btn-xs" onclick="decideAction('${p.actionId}', 'APPROVE')">✔ Approve & Send Immediately</button>

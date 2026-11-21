@@ -256,7 +256,7 @@ def process_patient_clinical_loop(patient_raw: Dict[str, Any]) -> Dict[str, Any]
         outreach_res = outreach_agent.run(
             f"TASK-OUTREACH-{patient_id}",
             patient_id,
-            {"lab": lab_res, "pharmacy": pharm_res}
+            {"lab": lab_res, "pharmacy": pharm_res, "name": patient_name, "patient_name": patient_name, "language": lang}
         )
         if outreach_res and "actionId" in outreach_res:
             db.save_proposal({
