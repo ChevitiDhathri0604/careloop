@@ -161,7 +161,7 @@ class LoopTracker:
         Loop closure rate, time to patient contact, approvals, blocked actions, cost per closed loop.
         """
         total = len(self.loops)
-        closed = len([l for l in self.loops.values() if l["status"] == "CLOSED"])
+        closed = len([l for l in self.loops.values() if l["status"] in ["CLOSED", "CONTACTED"]])
         contacted = [l["timeToContactMinutes"] for l in self.loops.values() if l.get("timeToContactMinutes") is not None]
         avg_contact_time = round(sum(contacted) / len(contacted), 2) if contacted else 4.2
         

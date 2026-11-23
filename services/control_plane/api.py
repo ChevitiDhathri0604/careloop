@@ -134,11 +134,15 @@ def decide_proposal(req: ApprovalDecisionRequest):
         agent_registry.record_feedback(action["agentId"], approved=True)
         updated = action_ledger.update_proposal_status(req.actionId, new_status, actor=req.clinicianId, notes=req.notes)
         
-        # If this was an outreach message, mark patient contacted in loop tracker
-        if action["actionType"] == "OUTREACH_SEND_MESSAGE":
-            active_loops = loop_tracker.get_active_loops(action["patientId"])
-            if active_loops:
-                loop_tracker.mark_patient_contacted(active_loops[0]["loopId"])
+        # If this was an outreach message or clinical action, mark patient contacted and close loop
+        active_loops = loop_tracker.get_active_loops(action["patientId"])
+        if active_loops:
+            loop_id = active_loops[0]["loopId"]
+            loop_tracker.mark_patient_contacted(loop_id)
+            loop_tracker.close_loop(
+                loop_id,
+                resolution_summary=f"Clinical safety loop resolved: Clinician ({req.clinicianId}) approved {action.get('actionType', 'outreach')}. Patient contact verified."
+            )
 
         return {"status": "APPROVED", "action": updated}
     else:

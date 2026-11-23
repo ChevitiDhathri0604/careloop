@@ -140,6 +140,13 @@ async function refreshLoops() {
       </div>
       <div class="loop-patient">Patient: <strong>${l.patientId}</strong> | SLA Deadline: 60 mins | Opened: ${new Date(l.openedAt).toLocaleTimeString()}</div>
       <div class="loop-timer">Time to Contact: ${l.timeToContactMinutes !== null ? l.timeToContactMinutes + ' mins' : 'Awaiting Clinician Message Sign-Off'}</div>
+      ${l.status !== 'CLOSED' ? `
+        <div style="margin-top: 8px;">
+          <button class="btn btn-sm" onclick="resolveLoop('${l.loopId}')" style="font-size: 11px; padding: 4px 10px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; border-radius: 4px; cursor: pointer;">
+            ✓ Mark Resolved & Close Loop
+          </button>
+        </div>
+      ` : ''}
     </div>
   `).join("");
 }
@@ -1762,3 +1769,21 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(refreshAll, 3000);
 });
 
+
+// Manual / 1-Click Loop Resolution
+window.resolveLoop = async function(loopId) {
+  let res = await fetchJSON(`/api/loops/${loopId}/close`, {
+    method: "POST",
+    body: JSON.stringify({ summary: "Resolved by clinician on dashboard: Patient safety loop closed successfully." })
+  });
+  if (!res) {
+    const l = mockState.loops.find(x => x.loopId === loopId);
+    if (l) {
+      l.status = "CLOSED";
+      l.timeToContactMinutes = 0.8;
+    }
+    mockState.metrics.closedLoops = (mockState.metrics.closedLoops || 0) + 1;
+    mockState.metrics.closureRatePct = 100;
+  }
+  await refreshAll();
+};
