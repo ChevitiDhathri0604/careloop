@@ -195,9 +195,15 @@ async function refreshInbox() {
           <strong>Certified Back-Translation for Clinician Verification:</strong><br/>
           "${payload.certifiedBackTranslation || payload.backTranslation || `Hello ${payload.patientName || p.patientName || p.patientId || 'Patient'}. Your blood test shows high potassium levels (6.4 mEq/L). Please stop taking your Spironolactone medication until further doctor consultation.`}"
         </div>
-        <div class="action-buttons">
+        <div class="action-buttons" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
           <button class="btn btn-approve btn-xs" onclick="decideAction('${p.actionId}', 'APPROVE')">✔ Approve & Send Immediately</button>
           <button class="btn btn-reject btn-xs" onclick="decideAction('${p.actionId}', 'REJECT')">✖ Override / Reject</button>
+          <button class="btn btn-outline btn-xs" style="border-color:#10b981; color:#34d399;" onclick="playOutreachAudio('${payload.targetLanguage || 'Telugu'}', '${p.actionId}')">
+            🔊 Listen Call (${payload.targetLanguage || 'Telugu'})
+          </button>
+          <button class="btn btn-outline btn-xs" style="border-color:#38bdf8; color:#38bdf8;" onclick="playEnglishAudio('${p.actionId}')">
+            🔊 Listen English
+          </button>
         </div>
       </div>
     `;
@@ -1764,6 +1770,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initWARModal();
   initIndividualStudio();
   initBulkStudio();
+  initVoiceAssistant();
 
   refreshAll();
   setInterval(refreshAll, 3000);

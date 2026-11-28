@@ -26,7 +26,10 @@
         <button id="btnOpenWARModal" class="btn btn-outline" style="border-color:#a855f7; color:#c084fc;">
           🏛️ Microsoft WAR Review
         </button>
-        <button id="btnOpenLLMModal" class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;">
+        <button id="btnOpenVoiceModal" class="btn btn-outline" style="border-color:#10b981; color:#34d399; font-weight:600;">
+          🎙️ Voice Assistant
+        </button>
+        <button id="btnOpenLLMModal"  class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;">
           ⚙️ LLM Gateway
         </button>
         <button id="btnRunDemo" class="btn btn-primary glow-button">
@@ -1244,5 +1247,165 @@
   </div>
 
   <script src="app.js?v=2.6"></script>
+
+  <!-- =========================================================================
+       FLOATING VOICE ASSISTANT ACTION WIDGET
+       ========================================================================= -->
+  <div id="floatingVoiceWidget" class="floating-voice-widget" title="Open CareLoop Hands-Free Voice Assistant">
+    <div class="voice-pulse-ring"></div>
+    <button id="btnFloatingVoice" class="floating-voice-btn">
+      <span class="voice-icon">🎙️</span>
+      <span class="voice-text">Voice Assistant</span>
+    </button>
+  </div>
+
+  <!-- =========================================================================
+       CARELOOP VOICE ASSISTANT & MULTILINGUAL IVR MODAL
+       ========================================================================= -->
+  <div id="modalVoiceAssistant" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog" style="max-width: 720px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>🎙️</span> CareLoop Voice Assistant &amp; Multilingual IVR
+        </div>
+        <button id="btnCloseVoiceModal" class="modal-close">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 24px;">
+        <!-- Dual Mode Tab Switcher -->
+        <div class="voice-tabs-bar">
+          <button class="voice-tab-btn active" id="tabVoiceClinician" data-tab="clinician">
+            <span>🩺</span> Clinician Hands-Free Command Center
+          </button>
+          <button class="voice-tab-btn" id="tabVoicePatient" data-tab="patient">
+            <span>📞</span> Patient Voice Call (IVR Simulator)
+          </button>
+        </div>
+
+        <!-- TAB 1: CLINICIAN HANDS-FREE VOICE COMMAND CENTER -->
+        <div id="voiceSectionClinician" class="voice-tab-content">
+          <div class="voice-control-center">
+            <button id="btnToggleMic" class="mic-circle-btn" title="Click to start / stop listening">
+              <span id="micIcon">🎙️</span>
+            </button>
+            <div id="voiceStatusText" class="voice-status-text">Click microphone to speak commands</div>
+            
+            <div class="voice-wave-container" id="voiceWaveContainer">
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+            </div>
+
+            <!-- Real-time transcript bubbles -->
+            <div class="voice-feedbacks">
+              <div class="transcript-bubble user" id="userTranscriptBubble">
+                <strong>You Said:</strong> <span id="userTranscriptText">"Click the mic or choose a quick voice command below..."</span>
+              </div>
+              <div class="transcript-bubble assistant" id="assistantResponseBubble">
+                <strong>CareLoop AI Voice:</strong> <span id="assistantResponseText">"Ready for clinical commands. You can approve proposals, debrief safety loops, or run demo scenarios hands-free."</span>
+              </div>
+            </div>
+
+            <!-- Quick Clickable Voice Commands (For evaluators / noisy environments) -->
+            <div style="margin-top: 18px; width: 100%;">
+              <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 6px;">
+                ⚡ Quick Clickable Voice Commands (Simulate Speech):
+              </div>
+              <div class="voice-chips-grid">
+                <button class="voice-command-chip" data-cmd="Approve proposal">
+                  <span>✔</span> "Approve Telugu Outreach"
+                </button>
+                <button class="voice-command-chip" data-cmd="Debrief clinical alert">
+                  <span>📢</span> "Debrief Clinical Alert"
+                </button>
+                <button class="voice-command-chip" data-cmd="Run demo scenario">
+                  <span>▶</span> "Run Demo Scenario"
+                </button>
+                <button class="voice-command-chip" data-cmd="Check audit chain">
+                  <span>🔗</span> "Verify SHA-256 Ledger"
+                </button>
+                <button class="voice-command-chip" data-cmd="Close safety loop">
+                  <span>⏱️</span> "Resolve Safety Loop"
+                </button>
+                <button class="voice-command-chip" data-cmd="Quarantine billing agent">
+                  <span>⚡</span> "Quarantine Billing Agent"
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: PATIENT MULTILINGUAL VOICE CALL (IVR SIMULATOR) -->
+        <div id="voiceSectionPatient" class="voice-tab-content hidden">
+          <div class="phone-simulator-card">
+            <div class="phone-header-row">
+              <div class="phone-caller-info">
+                <div class="phone-avatar">📞</div>
+                <div>
+                  <div style="font-weight: 700; color: #fff; font-size: 14px;">CareLoop Emergency Outreach Line</div>
+                  <div style="font-size: 12px; color: #94a3b8;">Outbound Call to Discharged Patient: <strong id="ivrPatientName" style="color:#38bdf8;">Ramesh Kumar</strong></div>
+                </div>
+              </div>
+              <span class="phone-status-badge" id="ivrCallStatus">IDLE / READY</span>
+            </div>
+
+            <!-- Language selector for IVR -->
+            <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+              <label style="font-size:12px; color:#cbd5e1; font-weight:600;">Patient Preferred Language:</label>
+              <select id="ivrLanguageSelect" class="form-select" style="max-width: 220px; padding: 6px 12px;">
+                <option value="te" selected>Telugu (తెలుగు - te-IN)</option>
+                <option value="hi">Hindi (हिन्दी - hi-IN)</option>
+                <option value="es">Spanish (Español - es-ES)</option>
+                <option value="en">English (en-US)</option>
+              </select>
+            </div>
+
+            <!-- Native Audio Script -->
+            <div class="phone-script-box">
+              <div style="font-size: 11px; text-transform: uppercase; color: #34d399; font-weight: 700; margin-bottom: 4px;">
+                🗣️ Spoken Voice Call Script (Native Language):
+              </div>
+              <p id="ivrSpokenScriptText" style="color: #f1f5f9; font-size: 13.5px; line-height: 1.6;">
+                "నమస్కారం రమేష్ కుమార్ గారు. మీ డిశ్చార్జ్ తర్వాత వచ్చిన రక్త పరీక్షలో పొటాషియం స్థాయి ఎక్కువగా (6.4 mEq/L) ఉన్నట్లు డాక్టర్ గుర్తించారు. దయచేసి తదుపరి డాక్టర్ సంప్రదింపుల వరకు మీ స్పైరోనోలాక్టోన్ మాత్రను వేసుకోవద్దు..."
+              </p>
+            </div>
+
+            <!-- Certified English Translation of Phone Call -->
+            <div class="evidence-box" style="margin: 0;">
+              <div style="font-size: 11px; text-transform: uppercase; color: #38bdf8; font-weight: 700; margin-bottom: 4px;">
+                📋 English Back-Translation of Voice Call:
+              </div>
+              <div id="ivrEnglishScriptText" style="font-size: 12.5px; color: #cbd5e1; line-height: 1.5;">
+                "Hello Ramesh Kumar. Your doctor noted that your post-discharge blood test shows high potassium (6.4 mEq/L). Please do NOT take your Spironolactone tablet until further consultation. An urgent cardiology follow-up is booked for tomorrow at 10:30 AM."
+              </div>
+            </div>
+
+            <!-- Call Control Buttons -->
+            <div class="phone-actions-row" style="margin-top: 6px;">
+              <button id="btnStartPatientCall" class="btn btn-primary" style="flex:1; background:linear-gradient(135deg, #10b981, #059669); font-weight:700;">
+                ▶ Simulate Patient Phone Call (Play Audio)
+              </button>
+              <button id="btnStopPatientCall" class="btn btn-outline" style="border-color:#ef4444; color:#f87171;">
+                ⏹️ End Call
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="padding: 12px 24px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; color:#94a3b8; font-family:var(--font-mono);">
+          Web Speech API • Zero Cloud Latency • Natural Voice Synthesis
+        </span>
+        <button id="btnDismissVoiceModal" class="btn btn-primary">✕ Close Assistant</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
